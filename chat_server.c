@@ -21,7 +21,7 @@
 #include <sys/types.h>
 #include <signal.h>
 
-#define MAX_CLIENTS	3
+#define MAX_CLIENTS	10
 #define DELIM " "
 #define LPORT 5000
 
@@ -48,6 +48,7 @@ void send_active_clients(int, pthread_mutex_t *);
 void strip_newline(char *);
 void print_client_addr(struct sockaddr_in);
 void client_count_mod(int, pthread_mutex_t *);
+int check_nick(char *, pthread_mutex_t *);
 
 client_t *clients[MAX_CLIENTS];
 
@@ -111,6 +112,21 @@ int send_message_all(char *s, pthread_mutex_t *lock){
 	pthread_mutex_unlock(lock);
 	return ret;
 }
+
+int check_nick(char *new_nick, pthread_mutex_t *lock){
+	int i, ret = 0;
+	pthread_mutex_lock(lock);
+	for(i=0;i<MAX_CLIENTS;i++)
+		if ( clients[i] ) {
+			if ( strcmp(clients[i]->name, new_nick) == 0 ) {
+				ret = -1;
+				break;
+			}
+		}
+	pthread_mutex_unlock(lock);
+	return ret;
+}
+
 			/* Send message to sender */
 int send_message_self(const char *s, int connfd){
 	if(write(connfd, s, strlen(s))<0){
@@ -220,11 +236,20 @@ void *handle_client(void *arg){
 				param = strtok_r(NULL, DELIM, &b_pos);
 				if(param){
 					char *old_name = malloc( (strlen(cli->name) + 1) * sizeof(char) );
-					strcpy(old_name, cli->name);	
-					strcpy(cli->name, param);
-					sprintf(buff_out, "<<INFO: Renamed %s TO %s\r\n", old_name, cli->name);
-					free(old_name);
-					send_message_all(buff_out, cli->lock);
+					strcpy(old_name, cli->name);
+					cli->name[0]='\0';
+					if ( check_nick(param, cli->lock) == 0) {
+						strcpy(cli->name, param);
+						sprintf(buff_out, "<<INFO: Renamed %s TO %s\r\n", old_name, cli->name);
+						free(old_name);
+						send_message_all(buff_out, cli->lock);
+					} else {
+			/* Reverting to old name with error message */
+						strcpy(cli->name, old_name);
+						free(old_name);
+						sprintf(buff_out, "<<ERROR: Nick %s is reserved\r\n", param);
+						send_message_self(buff_out, cli->connfd);
+					}
 				}else{
 					send_message_self("<<ERROR: Empty name given\r\n", cli->connfd);
 				}
