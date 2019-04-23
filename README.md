@@ -1,6 +1,6 @@
 Chat Server
 =
-[![Build Status](https://travis-ci.org/yorickdewid/Chat-Server.svg?branch=master)](https://travis-ci.org/yorickdewid/Chat-Server)
+
 
 *Note: This is an experimental fork of https://github.com/yorickdewid/Chat-Server.*
 
