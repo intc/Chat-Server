@@ -1,7 +1,6 @@
 Chat Server
 =
 
-
 *Note: This is an experimental fork of https://github.com/yorickdewid/Chat-Server.*
 
 * Thread safe library functions are used
@@ -25,11 +24,11 @@ Or build an executable with debug symbols
 
 ## Chat commands
 
-| Command       | Parameter             |                                     |
-| ------------- | --------------------- | ----------------------------------- |
-| \QUIT         |                       | Leave the chatroom                  |
-| \PING         |                       | Test connection, responds with PONG |
-| \NAME         | [nickname]            | Change nickname                     |
-| \PRIVATE      | [reference] [message] | Send private message                |
-| \ACTIVE       |                       | Show active clients                 |
-| \HELP         |                       | Show this help                      |
+| Command       | Parameter               |                                     |
+| ------------- | ----------------------- | ----------------------------------- |
+| \exit         |                         | Leave the chatroom                  |
+| \ping         |                         | Test connection, responds with PONG |
+| \nick         | [nickname]              | Change nickname                     |
+| \msg          | [receiver_id] [message] | Send private message                |
+| \who          |                         | Show active clients                 |
+| \help         |                         | Show this help                      |
