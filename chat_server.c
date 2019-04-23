@@ -1,10 +1,8 @@
-/*
- * Copyright 2014-2018
- *
- * Author: 		Yorick de Wid
- * Description:		Simple chatroom in C
- * Version:		1.0
- *
+/* Simple Chat Server
+ * Forked from: https://github.com/yorickdewid/Chat-Server / Yorick de Wid
+ * (C) 2019
+ * Authors: Antti Antinoja, Yorick de Wid
+ * Version: 0.1a
  */
 
 #include <sys/socket.h>
@@ -25,11 +23,12 @@
 
 #define MAX_CLIENTS	3
 #define DELIM " "
+#define LPORT 5000
 
 static unsigned int cli_count = 0;
 static int uid = 10;
 
-/* Client structure */
+			/* Client structure */
 typedef struct clinet_t {
 	struct sockaddr_in addr;    /* Client remote address */
 	int connfd;                 /* Connection file descriptor */
@@ -41,10 +40,10 @@ typedef struct clinet_t {
 void queue_add(client_t *, pthread_mutex_t *);
 void *handle_client(void *);
 void queue_delete(int, pthread_mutex_t *);
-void send_message(char *, int, pthread_mutex_t *);
-void send_message_all(char *, pthread_mutex_t *);
-void send_message_self(const char *, int);
-void send_message_client(char *, int, pthread_mutex_t *);
+int send_message(char *, int, pthread_mutex_t *);
+int send_message_all(char *, pthread_mutex_t *);
+int send_message_self(const char *, int);
+int send_message_client(char *, int, pthread_mutex_t *);
 void send_active_clients(int, pthread_mutex_t *);
 void strip_newline(char *);
 void print_client_addr(struct sockaddr_in);
@@ -52,7 +51,7 @@ void client_count_mod(int, pthread_mutex_t *);
 
 client_t *clients[MAX_CLIENTS];
 
-/* Add client to queue */
+			/* Add client to queue */
 void queue_add(client_t *cl, pthread_mutex_t *lock){
 	int i;
 	pthread_mutex_lock(lock);
@@ -64,8 +63,7 @@ void queue_add(client_t *cl, pthread_mutex_t *lock){
 		}
 	}
 }
-
-/* Delete client from queue */
+			/* Delete client from queue */
 void queue_delete(int uid, pthread_mutex_t *lock){
 	int i;
 	pthread_mutex_lock(lock);
@@ -79,65 +77,73 @@ void queue_delete(int uid, pthread_mutex_t *lock){
 		}
 	}
 }
-
-/* Send message to all clients but the sender */
-void send_message(char *s, int uid, pthread_mutex_t *lock){
-	int i;
+			/* Send message to all clients but the sender */
+int send_message(char *s, int uid, pthread_mutex_t *lock){
+	int i, ret = 0;
 	pthread_mutex_lock(lock);
 	for(i=0;i<MAX_CLIENTS;i++){
 		if(clients[i]){
 			if(clients[i]->uid != uid){
 				if(write(clients[i]->connfd, s, strlen(s))<0){
-					perror("write");
-					exit(-1);
+					perror("send_message() write");
+					ret = -1;
+					break;
 				}
 			}
 		}
 	}
 	pthread_mutex_unlock(lock);
+	return ret;
 }
-
-/* Send message to all clients */
-void send_message_all(char *s, pthread_mutex_t *lock){
-	int i;
+			/* Send message to all clients */
+int send_message_all(char *s, pthread_mutex_t *lock){
+	int i, ret = 0;
 	pthread_mutex_lock(lock);
 	for(i=0;i<MAX_CLIENTS;i++){
 		if(clients[i]){
 			if(write(clients[i]->connfd, s, strlen(s))<0){
-				perror("write");
-				exit(-1);
+				perror("send_message_all() write");
+				ret = -1;
+				break;
 			}
 		}
 	}
 	pthread_mutex_unlock(lock);
+	return ret;
 }
-
-/* Send message to sender */
-void send_message_self(const char *s, int connfd){
+			/* Send message to sender */
+int send_message_self(const char *s, int connfd){
 	if(write(connfd, s, strlen(s))<0){
-		perror("write");
-		exit(-1);
+		perror("send_message_self() write");
+		return -1;
 	}
+	return 0;
 }
-
-/* Send message to client */
-void send_message_client(char *s, int uid, pthread_mutex_t *lock){
-	int i;
+			/* Send message to client
+			 * return values are:
+			 *   -2: user not found
+			 *   -1: write failed
+			 *    0: OK */
+int send_message_client(char *s, int uid, pthread_mutex_t *lock){
+	int i, ret = -2;
 	pthread_mutex_lock(lock);
 	for(i=0;i<MAX_CLIENTS;i++){
 		if(clients[i]){
 			if(clients[i]->uid == uid){
 				if(write(clients[i]->connfd, s, strlen(s))<0){
-					perror("write");
-					exit(-1);
+					perror("send_message_client() write");
+					ret = -1;
+					break;
 				}
+				ret = 0;
+				break;
 			}
 		}
 	}
 	pthread_mutex_unlock(lock);
+	return ret;
 }
-
-/* Send list of active clients */
+			/* Send list of active clients */
 void send_active_clients(int connfd, pthread_mutex_t *lock){
 	int i;
 	char s[64];
@@ -150,8 +156,7 @@ void send_active_clients(int connfd, pthread_mutex_t *lock){
 	}
 	pthread_mutex_unlock(lock);
 }
-
-/* Strip CRLF */
+			/* Strip CRLF */
 void strip_newline(char *s){
 	while(*s != '\0'){
 		if(*s == '\r' || *s == '\n'){
@@ -160,8 +165,7 @@ void strip_newline(char *s){
 		s++;
 	}
 }
-
-/* Print ip address */
+			/* Print ip address */
 void print_client_addr(struct sockaddr_in addr){
 	printf("%d.%d.%d.%d",
 		addr.sin_addr.s_addr & 0xFF,
@@ -175,8 +179,7 @@ void client_count_mod(int num, pthread_mutex_t *lock){
 	cli_count = cli_count + num;
 	pthread_mutex_unlock(lock);
 }
-
-/* Handle all communication with the client */
+			/* Handle all communication with the client */
 void *handle_client(void *arg){
 	char buff_out[2048];
 	char buff_in[1024];
@@ -185,15 +188,14 @@ void *handle_client(void *arg){
 
 	client_count_mod(+1, cli->lock);
 
-
 	printf("<<ACCEPT ");
 	print_client_addr(cli->addr);
 	printf(" REFERENCED BY %d\n", cli->uid);
 
-	sprintf(buff_out, "<<JOIN, HELLO %s\r\n", cli->name);
+	sprintf(buff_out, "<<INFO: Hello %s\r\n", cli->name);
 	send_message_all(buff_out, cli->lock);
 
-	/* Receive input from client */
+			/* Receive input from client */
 	while((rlen = read(cli->connfd, buff_in, sizeof(buff_in)-1)) > 0){
 		buff_in[rlen] = '\0';
 		buff_out[0] = '\0';
@@ -201,20 +203,20 @@ void *handle_client(void *arg){
 
 		printf("%i: read %i bytes.\n", cli->uid, rlen);
 
-		/* Ignore empty buffer */
+			/* Ignore empty buffer */
 		if(!strlen(buff_in)){
 			continue;
 		}
 
-		/* Special options */
+			/* Special options */
 		if(buff_in[0] == '\\'){
 			char *command = NULL, *param = NULL, *b_pos = NULL;
 			command = strtok_r(buff_in, DELIM, &b_pos);
-			if(!strcmp(command, "\\QUIT")){
+			if(!strcmp(command, "\\exit")){
 				break;
-			}else if(!strcmp(command, "\\PING")){
-				send_message_self("<<PONG\r\n", cli->connfd);
-			}else if(!strcmp(command, "\\NAME")){
+			}else if(!strcmp(command, "\\ping")){
+				send_message_self("<<INFO: pong\r\n", cli->connfd);
+			}else if(!strcmp(command, "\\nick")){
 				param = strtok_r(NULL, DELIM, &b_pos);
 				if(param){
 					char *old_name = malloc( (strlen(cli->name) + 1) * sizeof(char) );
@@ -224,9 +226,9 @@ void *handle_client(void *arg){
 					free(old_name);
 					send_message_all(buff_out, cli->lock);
 				}else{
-					send_message_self("<<NAME CANNOT BE NULL\r\n", cli->connfd);
+					send_message_self("<<ERROR: Empty name given\r\n", cli->connfd);
 				}
-			}else if(!strcmp(command, "\\PRIVATE")){
+			}else if(!strcmp(command, "\\msg")){
 				param = strtok_r(NULL, DELIM, &b_pos);
 				if(param){
 					int uid = atoi(param);
@@ -239,27 +241,31 @@ void *handle_client(void *arg){
 							param = strtok_r(NULL, DELIM, &b_pos);
 						}
 						strcat(buff_out, "\r\n");
-						send_message_client(buff_out, uid, cli->lock);
+						int ret = send_message_client(buff_out, uid, cli->lock);
+						if ( ret == -2 )
+							send_message_self("<<ERROR: Unknown receiver_id\r\n", cli->connfd);
+						if ( ret == -1 )
+							send_message_self("<<ERROR (server): Write failed!\r\n", cli->connfd);
 					}else{
-						send_message_self("<<MESSAGE CANNOT BE NULL\r\n", cli->connfd);
+						send_message_self("<<ERROR: Empty message\r\n", cli->connfd);
 					}
 				}else{
-					send_message_self("<<REFERENCE CANNOT BE NULL\r\n", cli->connfd);
+					send_message_self("<<ERROR: No receiver given\r\n", cli->connfd);
 				}
-			}else if(!strcmp(command, "\\ACTIVE")){
-				sprintf(buff_out, "<<CLIENTS %d\r\n", cli_count);
+			}else if(!strcmp(command, "\\who")){
+				sprintf(buff_out, "<<INFO: Users %d\r\n", cli_count);
 				send_message_self(buff_out, cli->connfd);
 				send_active_clients(cli->connfd, cli->lock);
-			}else if(!strcmp(command, "\\HELP")){
-				strcat(buff_out, "\\QUIT     Quit chatroom\r\n");
-				strcat(buff_out, "\\PING     Server test\r\n");
-				strcat(buff_out, "\\NAME     <name> Change nickname\r\n");
-				strcat(buff_out, "\\PRIVATE  <reference> <message> Send private message\r\n");
-				strcat(buff_out, "\\ACTIVE   Show active clients\r\n");
-				strcat(buff_out, "\\HELP     Show help\r\n");
+			}else if(!strcmp(command, "\\help")){
+				strcat(buff_out, "\\exit     Quit chatroom\r\n");
+				strcat(buff_out, "\\ping     Server test\r\n");
+				strcat(buff_out, "\\nick     <name> Change nickname\r\n");
+				strcat(buff_out, "\\msg      <receiver_id> <message> Send private message\r\n");
+				strcat(buff_out, "\\who      Show active clients\r\n");
+				strcat(buff_out, "\\help     This help\r\n");
 				send_message_self(buff_out, cli->connfd);
 			}else{
-				send_message_self("<<UNKOWN COMMAND\r\n", cli->connfd);
+				send_message_self("<<ERROR: Unknown command\r\n", cli->connfd);
 			}
 		}else{
 			/* Send message */
@@ -268,12 +274,12 @@ void *handle_client(void *arg){
 		}
 	}
 
-	/* Close connection */
+			/* Close connection */
 	sprintf(buff_out, "<<LEAVE, BYE %s\r\n", cli->name);
 	send_message_all(buff_out, cli->lock);
 	close(cli->connfd);
 
-	/* Delete client from queue and yield thread */
+			/* Delete client from queue and yield thread */
 	queue_delete(cli->uid, cli->lock);
 	printf("<<LEAVE ");
 	print_client_addr(cli->addr);
@@ -292,22 +298,23 @@ int main(void){
 	pthread_t tid;
 	pthread_mutex_t lock; pthread_mutex_init(&lock, NULL);
 
-	/* Socket settings */
+			/* Socket settings */
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serv_addr.sin_port = htons(5000);
+	serv_addr.sin_port = htons(LPORT);
 
-	/* Ignore pipe signals */
-	//signal(SIGPIPE, SIG_IGN);
+			/* About SGIPIE
+			 * https://www.postgresql.org/message-id/1243914753.517466.918714025754.1.gpush%40pingu
+			 */
 
-	/* Bind */
+			/* Bind */
 	if(bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0){
 		perror("Socket binding failed");
 		return 1;
 	}
 
-	/* Listen */
+			/* Listen */
 	if(listen(listenfd, 10) < 0){
 		perror("Socket listening failed");
 		return 1;
@@ -315,12 +322,12 @@ int main(void){
 
 	printf("<[SERVER STARTED]>\n");
 
-	/* Accept clients */
+			/* Accept clients */
 	while(1){
 		socklen_t clilen = sizeof(cli_addr);
 		connfd = accept(listenfd, (struct sockaddr*)&cli_addr, &clilen);
 
-		/* Check if max clients is reached */
+			/* Check if max clients is reached */
 		pthread_mutex_lock(&lock);
 		if((cli_count+1) > MAX_CLIENTS){
 			printf("<<MAX CLIENTS REACHED\n");
@@ -332,8 +339,7 @@ int main(void){
 			continue;
 		} else pthread_mutex_unlock(&lock);
 
-
-		/* Client settings */
+			/* Client settings */
 		client_t *cli = (client_t *)malloc(sizeof(client_t));
 		cli->addr = cli_addr;
 		cli->connfd = connfd;
@@ -341,7 +347,7 @@ int main(void){
 		cli->lock = &lock;
 		sprintf(cli->name, "%d", cli->uid);
 
-		/* Add client to the queue and create thread */
+			/* Add client to the queue and create thread */
 		queue_add(cli, &lock);
 		pthread_create(&tid, NULL, handle_client, (void*) cli);
 	}
