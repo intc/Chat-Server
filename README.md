@@ -32,3 +32,7 @@ Or build an executable with debug symbols
 | \msg          | [receiver_id] [message] | Send private message                |
 | \who          |                         | Show active clients                 |
 | \help         |                         | Show this help                      |
+
+## Connecting with socat
+
+`$ socat - TCP:<server_ip>:5000`
