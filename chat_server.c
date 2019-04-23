@@ -188,9 +188,9 @@ void *handle_client(void *arg){
 
 	client_count_mod(+1, cli->lock);
 
-	printf("<<ACCEPT ");
+	printf("INFO: New connection ");
 	print_client_addr(cli->addr);
-	printf(" REFERENCED BY %d\n", cli->uid);
+	printf(" Id %d\n", cli->uid);
 
 	sprintf(buff_out, "<<INFO: Hello %s\r\n", cli->name);
 	send_message_all(buff_out, cli->lock);
