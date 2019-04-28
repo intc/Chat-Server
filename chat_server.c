@@ -329,7 +329,7 @@ int main(void){
 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	serv_addr.sin_port = htons(LPORT);
 
-			/* About SGIPIE
+			/* About SIGPIPE
 			 * https://www.postgresql.org/message-id/1243914753.517466.918714025754.1.gpush%40pingu
 			 */
 
