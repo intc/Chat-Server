@@ -22,7 +22,7 @@ CC = gcc
 	$(CC) $(DEFS) $(CFLAGS) -c -o $@ $<
 
 %_debug.o: $(SOURCES)
-	$(CC) $(DEFS) $(D_CFLAGS)  -c -o $@ $<
+	$(CC) $(DEFS) $(CFDBUG)  -c -o $@ $<
 
 all: $(TARGET)
 	@printf "CFLAGS: $(CFLAGS)\n"
